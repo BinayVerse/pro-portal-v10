@@ -357,12 +357,18 @@
 import { z } from 'zod'
 import type { FormSubmitEvent } from '#ui/types'
 import { nextTick } from 'vue'
+import { useArtefactsStore } from '~/stores/artefacts'
+import { useNotification } from '~/composables/useNotification'
 
 interface GoogleDriveFile {
   id: string
   name: string
   type: string
   size: string
+  mimeType?: string
+  webViewLink?: string
+  thumbnailLink?: string
+  modifiedTime?: string
 }
 
 interface Props {
@@ -371,6 +377,12 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// Initialize artefacts store
+const artefactsStore = useArtefactsStore()
+
+// Initialize notification composable
+const { showError, showWarning, showSuccess } = useNotification()
 
 const emit = defineEmits<{
   'update:isOpen': [value: boolean]
@@ -415,9 +427,11 @@ const googleDriveState = reactive({
   url: '',
 })
 
-const googleDriveFiles = ref<GoogleDriveFile[]>([])
-const isFetchingFiles = ref(false)
 const isUploadingFromGoogleDrive = ref(false)
+
+// Google Drive computed properties from store
+const googleDriveFiles = computed(() => artefactsStore.googleDriveFiles)
+const isFetchingFiles = computed(() => artefactsStore.isLoadingGoogleDrive)
 
 // Form state for UForm
 const state = reactive({
@@ -486,14 +500,14 @@ const handleFileSelect = (event: Event) => {
 const setFile = (file: File) => {
   // Validate file size (20MB limit)
   if (file.size > 20 * 1024 * 1024) {
-    alert('File size must be less than 20MB')
+    showError('File size must be less than 20MB')
     return
   }
 
   // Validate file type
   const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/csv', 'text/markdown', 'image/png', 'image/jpeg', 'image/jpg']
   if (!allowedTypes.includes(file.type) && !file.name.endsWith('.md')) {
-    alert('Unsupported file type. Please upload PDF, Word, TXT, CSV, Markdown, or Image files.')
+    showError('Unsupported file type. Please upload PDF, Word, TXT, CSV, Markdown, or Image files.')
     return
   }
 
@@ -566,66 +580,58 @@ const onSubmit = async (event: FormSubmitEvent<Schema>) => {
     }
 
     isUploading.value = false
+    showSuccess(`File "${newArtefact.name}" uploaded successfully!`)
     emit('close')
 
   } catch (error) {
     console.error('Upload failed:', error)
-    alert('Upload failed. Please try again.')
+    showError('Upload failed. Please try again.')
     isUploading.value = false
   }
 }
 
 // Google Drive methods
+const validateGoogleDriveUrl = (url: string): boolean => {
+  const urlRegex = /^https?:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]{32,}\/?$/
+  return urlRegex.test(url)
+}
+
 const fetchGoogleDriveFiles = async () => {
   if (!googleDriveState.url) {
-    alert('Please enter a Google Drive URL')
+    showWarning('Please enter a Google Drive URL')
+    return
+  }
+
+  // Validate URL format
+  if (!validateGoogleDriveUrl(googleDriveState.url)) {
+    showError('Invalid Google Drive URL. Please use a valid folder URL.')
     return
   }
 
   try {
-    isFetchingFiles.value = true
+    const result = await artefactsStore.fetchGoogleDriveFiles(googleDriveState.url)
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // Mock files data
-    googleDriveFiles.value = [
-      {
-        id: '1',
-        name: 'Company Policy 2024.pdf',
-        type: 'PDF',
-        size: '2.4 MB'
-      },
-      {
-        id: '2',
-        name: 'Employee Guidelines.docx',
-        type: 'Word',
-        size: '1.2 MB'
-      },
-      {
-        id: '3',
-        name: 'Budget Report.csv',
-        type: 'CSV',
-        size: '890 kB'
-      }
-    ]
-
+    if (!result.success) {
+      showError(result.message || 'Failed to fetch files from Google Drive')
+    } else if (result.files.length === 0) {
+      showWarning('No supported files found in the Google Drive folder')
+    } else {
+      showSuccess(`Found ${result.files.length} supported file${result.files.length > 1 ? 's' : ''} in Google Drive folder`)
+    }
   } catch (error) {
     console.error('Failed to fetch files:', error)
-    alert('Failed to fetch files from Google Drive. Please check the URL and try again.')
-  } finally {
-    isFetchingFiles.value = false
+    showError('Failed to fetch files from Google Drive. Please check the URL and try again.')
   }
 }
 
 const uploadFromGoogleDrive = async () => {
   if (!googleDriveState.category) {
-    alert('Please select a category')
+    showWarning('Please select a category')
     return
   }
 
   if (googleDriveFiles.value.length === 0) {
-    alert('No files available to upload')
+    showWarning('No files available to upload')
     return
   }
 
@@ -653,14 +659,15 @@ const uploadFromGoogleDrive = async () => {
     // Reset Google Drive state
     googleDriveState.category = ''
     googleDriveState.url = ''
-    googleDriveFiles.value = []
+    artefactsStore.clearGoogleDriveFiles()
 
     isUploadingFromGoogleDrive.value = false
+    showSuccess(`Successfully uploaded ${newArtefacts.length} file${newArtefacts.length > 1 ? 's' : ''} from Google Drive!`)
     emit('close')
 
   } catch (error) {
     console.error('Upload from Google Drive failed:', error)
-    alert('Upload failed. Please try again.')
+    showError('Upload failed. Please try again.')
     isUploadingFromGoogleDrive.value = false
   }
 }
@@ -686,13 +693,12 @@ const resetAllFields = () => {
   state.description = ''
   googleDriveState.category = ''
   googleDriveState.url = ''
-  googleDriveFiles.value = []
+  artefactsStore.clearGoogleDriveFiles()
 
   if (fileInput.value) {
     fileInput.value.value = ''
   }
 
-  isFetchingFiles.value = false
   isUploadingFromGoogleDrive.value = false
 }
 
@@ -718,7 +724,7 @@ watch(uploadType, () => {
   state.description = ''
   googleDriveState.category = ''
   googleDriveState.url = ''
-  googleDriveFiles.value = []
+  artefactsStore.clearGoogleDriveFiles()
 
   // Reset file input
   if (fileInput.value) {
@@ -726,7 +732,6 @@ watch(uploadType, () => {
   }
 
   // Reset loading states
-  isFetchingFiles.value = false
   isUploadingFromGoogleDrive.value = false
 })
 </script>
