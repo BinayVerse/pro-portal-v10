@@ -9,13 +9,14 @@ import fs from 'fs'
 import mime from 'mime-types'
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-  const bucketName = config.awsBucketName
-  const folderName = config.awsFolderName
+  try {
+    const config = useRuntimeConfig()
+    const bucketName = config.awsBucketName
+    const folderName = config.awsFolderName
 
-  if (!bucketName) {
-    throw new CustomError('AWS S3 bucket name is not configured', 500)
-  }
+    if (!bucketName) {
+      throw new CustomError('AWS S3 bucket name is not configured', 500)
+    }
 
   const token = event.node.req.headers['authorization']?.split(' ')[1]
   if (!token) {
@@ -44,7 +45,7 @@ export default defineEventHandler(async (event) => {
 
   const { org_name, org_id } = userResult.rows[0]
   const companyName = org_name.toLowerCase().replace(/ /g, '_')
-  const prefix = `${folderName}/${companyName}/artefacts/`
+  const prefix = `${folderName}/${companyName}/files/`
 
   const s3Client = new S3Client({
     region: config.awsRegion,
@@ -55,11 +56,11 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
-    const form = formidable({ 
+    const form = formidable({
       multiples: false,
       maxFileSize: 20 * 1024 * 1024 // 20MB limit to match frontend
     })
-    
+
     const { fields, files } = await new Promise<{ fields: any; files: any }>((resolve, reject) => {
       form.parse(event.node.req, (err, fields, files) => {
         if (err) reject(err)
@@ -125,7 +126,7 @@ export default defineEventHandler(async (event) => {
     let categoryId = null
     if (category && category !== 'Uncategorized') {
       const categoryQuery = await query(
-        `SELECT id FROM document_categories WHERE name = $1 AND org_id = $2`,
+        `SELECT id FROM document_category WHERE name = $1 AND org_id = $2`,
         [category, org_id]
       )
       if (categoryQuery.rows.length > 0) {
@@ -133,7 +134,7 @@ export default defineEventHandler(async (event) => {
       } else {
         // Create category if it doesn't exist
         const newCategoryResult = await query(
-          `INSERT INTO document_categories (name, org_id, added_by) VALUES ($1, $2, $3) RETURNING id`,
+          `INSERT INTO document_category (name, org_id, added_by) VALUES ($1, $2, $3) RETURNING id`,
           [category, org_id, userId]
         )
         categoryId = newCategoryResult.rows[0].id
@@ -212,6 +213,15 @@ export default defineEventHandler(async (event) => {
       statusCode: 500,
       status: 'error',
       message: error.message || 'Failed to process request',
+    }
+  }
+  } catch (outerError: any) {
+    console.error('Unexpected error:', outerError)
+    setResponseStatus(event, 500)
+    return {
+      statusCode: 500,
+      status: 'error',
+      message: 'Unexpected server error',
     }
   }
 })
