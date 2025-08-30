@@ -139,68 +139,17 @@ const categoriesLoading = computed(() => {
 })
 const categoriesError = computed(() => artefactsStore.getCategoryError)
 
-// Sample artefacts data
-const artefacts = ref([
-  {
-    id: 1,
-    name: 'Employee Handbook 2024.pdf',
-    description: 'Comprehensive guide to company policies',
-    category: 'HR Policy',
-    type: 'PDF',
-    size: '2.3 MB',
-    status: 'processed',
-    uploadedBy: 'Sarah Johnson',
-    lastUpdated: formatDateTime(new Date('2024-01-15T14:30:00')),
-    artefact: 'Employee Handbook 2024.pdf',
-  },
-  {
-    id: 2,
-    name: 'Q4 Financial Report.docx',
-    description: 'Quarterly financial reports including revenue, expenses',
-    category: 'Financial',
-    type: 'Word',
-    size: '1.6 MB',
-    status: 'processing',
-    uploadedBy: 'Mike Chen',
-    lastUpdated: formatDateTime(new Date('2024-01-10T09:15:00')),
-    artefact: 'Q4 Financial Report.docx',
-  },
-  {
-    id: 3,
-    name: 'Product Specifications.md',
-    description: 'Detailed technical specifications for the new product',
-    category: 'Technical',
-    type: 'Markdown',
-    size: '512.0 kB',
-    status: 'processed',
-    uploadedBy: 'Emily Davis',
-    lastUpdated: formatDateTime(new Date('2024-01-08T16:45:00')),
-    artefact: 'Product Specifications.md',
-  },
-  {
-    id: 4,
-    name: 'Customer Data.csv',
-    description: 'Customer demographics and behavior analysis data',
-    category: 'Analytics',
-    type: 'CSV',
-    size: '3.1 MB',
-    status: 'processed',
-    uploadedBy: 'Alex Rodriguez',
-    lastUpdated: formatDateTime(new Date('2024-01-20T11:20:00')),
-    artefact: 'Customer Data.csv',
-  },
-])
+// Computed properties for artefacts and stats from store
+const artefacts = computed(() => artefactsStore.getArtefacts)
+const stats = computed(() => artefactsStore.getStats)
+const isLoadingArtefacts = computed(() => artefactsStore.isArtefactsLoading)
+const artefactsError = computed(() => artefactsStore.getArtefactsError)
 
-// Computed properties
-const totalArtefacts = computed(() => artefacts.value.length)
-const processedArtefacts = computed(
-  () => artefacts.value.filter((doc) => doc.status === 'processed').length,
-)
-const totalCategories = computed(() => {
-  const categories = new Set(artefacts.value.map((doc) => doc.category))
-  return categories.size
-})
-const totalSize = computed(() => '7.8 MB') // This would be calculated from actual file sizes
+// Individual stats computed properties
+const totalArtefacts = computed(() => stats.value.totalArtefacts)
+const processedArtefacts = computed(() => stats.value.processedArtefacts)
+const totalCategories = computed(() => stats.value.totalCategories)
+const totalSize = computed(() => stats.value.totalSize)
 
 const filteredArtefacts = computed(() => {
   return artefacts.value.filter((artefact) => {
@@ -241,30 +190,14 @@ const viewSummary = (artefact: any) => {
 }
 
 // Upload handlers
-const handleFileUploaded = (artefact: any) => {
-  artefacts.value.unshift(artefact)
-  
-  // After 2 seconds, mark as processed
-  setTimeout(() => {
-    const uploadedArtefact = artefacts.value.find(a => a.id === artefact.id)
-    if (uploadedArtefact) {
-      uploadedArtefact.status = 'processed'
-    }
-  }, 2000)
+const handleFileUploaded = async (artefact: any) => {
+  // Refresh the artefacts list to get updated data and stats
+  await artefactsStore.fetchArtefacts()
 }
 
-const handleGoogleDriveUploaded = (newArtefacts: any[]) => {
-  newArtefacts.forEach(artefact => {
-    artefacts.value.unshift(artefact)
-    
-    // After 2 seconds, mark as processed
-    setTimeout(() => {
-      const uploadedArtefact = artefacts.value.find(a => a.id === artefact.id)
-      if (uploadedArtefact) {
-        uploadedArtefact.status = 'processed'
-      }
-    }, 2000)
-  })
+const handleGoogleDriveUploaded = async (newArtefacts: any[]) => {
+  // Refresh the artefacts list to get updated data and stats
+  await artefactsStore.fetchArtefacts()
 }
 
 // Category management methods
@@ -276,6 +209,8 @@ const addCategory = async (category: string) => {
     // Use API if orgId is available
     try {
       await artefactsStore.createCategory(trimmedCategory, orgId.value)
+      // Refresh artefacts list to update stats if needed
+      await artefactsStore.fetchArtefacts()
     } catch (error) {
       console.error('Failed to add category:', error)
       // Show error message to user
@@ -309,25 +244,14 @@ const confirmDeleteCategory = async () => {
       if (categoryData) {
         await artefactsStore.deleteCategory(categoryData.id, orgId.value)
 
-        // Update any existing artefacts that use this category
-        artefacts.value.forEach(artefact => {
-          if (artefact.category === category) {
-            artefact.category = 'Uncategorized'
-          }
-        })
+        // Refresh artefacts list to update stats and category assignments
+        await artefactsStore.fetchArtefacts()
       }
     } else {
       // Fallback to local management if no orgId
       console.warn('No organization ID available, category changes will not be persisted')
       const { showWarning } = useNotification()
       showWarning('Category deleted locally only. Changes will not be saved.')
-
-      // Update any existing artefacts that use this category (local only)
-      artefacts.value.forEach(artefact => {
-        if (artefact.category === category) {
-          artefact.category = 'Uncategorized'
-        }
-      })
     }
   } catch (error) {
     console.error('Failed to delete category:', error)
@@ -401,10 +325,14 @@ const initializePage = async () => {
     // Check if user is authenticated and has orgId
     if (authStore.isLoggedIn && orgId.value) {
       console.log('User authenticated with orgId:', orgId.value)
-      // Ensure token is available before fetching categories
+      // Ensure token is available before fetching data
       const token = process.client ? localStorage.getItem('authToken') : null
       if (token) {
-        await initializeCategories()
+        // Fetch both categories and artefacts
+        await Promise.all([
+          initializeCategories(),
+          artefactsStore.fetchArtefacts()
+        ])
       } else {
         console.warn('No auth token available')
       }
@@ -416,13 +344,16 @@ const initializePage = async () => {
   }
 }
 
-// Watch for orgId changes and fetch categories
+// Watch for orgId changes and fetch data
 watch(orgId, (newOrgId) => {
   if (newOrgId && authStore.isLoggedIn) {
-    console.log('OrgId changed, fetching categories:', newOrgId)
+    console.log('OrgId changed, fetching data:', newOrgId)
     const token = process.client ? localStorage.getItem('authToken') : null
     if (token) {
-      initializeCategories()
+      Promise.all([
+        initializeCategories(),
+        artefactsStore.fetchArtefacts()
+      ])
     }
   }
 }, { immediate: false })
@@ -430,10 +361,13 @@ watch(orgId, (newOrgId) => {
 // Watch for authentication changes
 watch(() => authStore.isLoggedIn, (isAuth) => {
   if (isAuth && orgId.value) {
-    console.log('Authentication status changed, fetching categories')
+    console.log('Authentication status changed, fetching data')
     const token = process.client ? localStorage.getItem('authToken') : null
     if (token) {
-      initializeCategories()
+      Promise.all([
+        initializeCategories(),
+        artefactsStore.fetchArtefacts()
+      ])
     }
   }
 })

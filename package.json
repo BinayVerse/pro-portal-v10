@@ -30,6 +30,7 @@
     "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "csv-stringify": "^6.6.0",
+    "dayjs": "^1.11.18",
     "formidable": "^3.5.4",
     "github-markdown-css": "^5.8.1",
     "google-auth-library": "^10.3.0",

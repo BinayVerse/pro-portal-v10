@@ -12,6 +12,16 @@ export const useArtefactsStore = defineStore('artefacts', {
     newCategory: null as DocumentCategory | null,
     isCategoryLoading: false,
     categoryError: null as string | null,
+    // Artefacts list and stats
+    artefacts: [] as any[],
+    stats: {
+      totalArtefacts: 0,
+      processedArtefacts: 0,
+      totalCategories: 0,
+      totalSize: '0 Bytes'
+    },
+    isLoadingArtefacts: false,
+    artefactsError: null as string | null,
   }),
 
   getters: {
@@ -20,6 +30,11 @@ export const useArtefactsStore = defineStore('artefacts', {
     getCategoryNames: (state): string[] => state.categories.map(cat => cat.name),
     isCategoryLoadingState: (state): boolean => state.isCategoryLoading,
     getCategoryError: (state): string | null => state.categoryError,
+    // Artefacts getters
+    getArtefacts: (state): any[] => state.artefacts,
+    getStats: (state) => state.stats,
+    isArtefactsLoading: (state): boolean => state.isLoadingArtefacts,
+    getArtefactsError: (state): string | null => state.artefactsError,
   },
 
   actions: {
@@ -342,6 +357,95 @@ export const useArtefactsStore = defineStore('artefacts', {
 
     clearCategoryError() {
       this.categoryError = null
+    },
+
+    // Artefacts Actions
+    async fetchArtefacts() {
+      this.isLoadingArtefacts = true
+      this.artefactsError = null
+      const userTimezone = process.client ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          data: {
+            artefacts: any[]
+            stats: {
+              totalArtefacts: number
+              processedArtefacts: number
+              totalCategories: number
+              totalSize: string
+            }
+          }
+          message: string
+        }>('/api/artefacts/list', {
+          method: 'POST',
+          body: { timezone: userTimezone },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error(response.message)
+        }
+
+        this.artefacts = response.data.artefacts || []
+        this.stats = response.data.stats || {
+          totalArtefacts: 0,
+          processedArtefacts: 0,
+          totalCategories: 0,
+          totalSize: '0 Bytes'
+        }
+
+        return {
+          success: true,
+          data: response.data,
+          message: response.message
+        }
+      } catch (error: any) {
+        console.error('Artefacts fetch error:', error)
+
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        this.artefactsError = this.handleError(error, 'Failed to fetch artefacts')
+        return {
+          success: false,
+          data: null,
+          message: this.artefactsError
+        }
+      } finally {
+        this.isLoadingArtefacts = false
+      }
+    },
+
+    clearArtefacts() {
+      this.artefacts = []
+      this.stats = {
+        totalArtefacts: 0,
+        processedArtefacts: 0,
+        totalCategories: 0,
+        totalSize: '0 Bytes'
+      }
+      this.artefactsError = null
+    },
+
+    clearArtefactsError() {
+      this.artefactsError = null
     },
   },
 })
