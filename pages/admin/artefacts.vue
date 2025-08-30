@@ -315,9 +315,6 @@ const confirmDeleteCategory = async () => {
             artefact.category = 'Uncategorized'
           }
         })
-
-        const { showSuccess } = useNotification()
-        showSuccess(`Category "${category}" deleted successfully`)
       }
     } else {
       // Fallback to local management if no orgId

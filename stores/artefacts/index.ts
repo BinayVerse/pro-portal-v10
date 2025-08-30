@@ -106,6 +106,56 @@ export const useArtefactsStore = defineStore('artefacts', {
       this.otherFilesCount = 0
     },
 
+    async uploadArtefact(formData: FormData) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          message: string
+          data: any
+        }>('/api/artefacts/upload', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error(response.message)
+        }
+
+        return {
+          success: true,
+          data: response.data,
+          message: response.message
+        }
+      } catch (error: any) {
+        console.error('Artefact upload error:', error)
+
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          data: null,
+          message: this.handleError(error, 'Failed to upload artefact')
+        }
+      }
+    },
+
     handleError(error: any, fallbackMessage: string): string {
       console.error('Artefacts store error:', error)
 
