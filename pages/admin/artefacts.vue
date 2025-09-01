@@ -129,12 +129,10 @@ const fallbackCategories = [
 const availableCategories = computed(() => {
   const storeCategories = artefactsStore.getCategoryNames
   const categories = storeCategories.length > 0 ? storeCategories : fallbackCategories
-  console.log('Available categories computed:', categories.length, 'from store:', storeCategories.length)
   return categories
 })
 const categoriesLoading = computed(() => {
   const loading = artefactsStore.isCategoryLoadingState
-  console.log('Categories loading state:', loading)
   return loading
 })
 const categoriesError = computed(() => artefactsStore.getCategoryError)
@@ -168,11 +166,11 @@ const filteredArtefacts = computed(() => {
 
 // Methods
 const viewArtefact = (artefact: any) => {
-  console.log('View artefact:', artefact)
+  // View artefact logic to be implemented
 }
 
 const downloadArtefact = (artefact: any) => {
-  console.log('Download artefact:', artefact)
+  // Download artefact logic to be implemented
 }
 
 const deleteArtefact = (artefact: any) => {
@@ -212,14 +210,12 @@ const addCategory = async (category: string) => {
       // Refresh artefacts list to update stats if needed
       await artefactsStore.fetchArtefacts()
     } catch (error) {
-      console.error('Failed to add category:', error)
       // Show error message to user
       const { showError } = useNotification()
       showError('Failed to add category. Please try again.')
     }
   } else {
     // Fallback to local management if no orgId
-    console.warn('No organization ID available, category changes will not be persisted')
     const { showWarning } = useNotification()
     showWarning('Category added locally only. Changes will not be saved.')
   }
@@ -249,12 +245,10 @@ const confirmDeleteCategory = async () => {
       }
     } else {
       // Fallback to local management if no orgId
-      console.warn('No organization ID available, category changes will not be persisted')
       const { showWarning } = useNotification()
       showWarning('Category deleted locally only. Changes will not be saved.')
     }
   } catch (error) {
-    console.error('Failed to delete category:', error)
     const { showError } = useNotification()
     showError('Failed to delete category. Please try again.')
   } finally {
@@ -277,26 +271,20 @@ const cancelDeleteCategory = (event?: Event) => {
 // Initialize categories when orgId is available
 const initializeCategories = async () => {
   if (!orgId.value) {
-    console.warn('No orgId available for category fetch')
     return
   }
 
   const token = process.client ? localStorage.getItem('authToken') : null
   if (!token) {
-    console.warn('No auth token available for category fetch')
     return
   }
 
   try {
-    console.log('Fetching categories for org:', orgId.value, 'with token:', token ? 'present' : 'missing')
     await artefactsStore.fetchCategories(orgId.value)
-    console.log('Categories fetched successfully:', artefactsStore.categories.length)
   } catch (error: any) {
-    console.error('Failed to fetch document categories:', error)
 
     // Handle specific error types
     if (error?.statusCode === 401 || error?.response?.status === 401) {
-      console.error('Authentication error - token may be invalid or expired')
       const { showError } = useNotification()
       showError('Session expired. Please log in again.')
 
@@ -324,7 +312,6 @@ const initializePage = async () => {
 
     // Check if user is authenticated and has orgId
     if (authStore.isLoggedIn && orgId.value) {
-      console.log('User authenticated with orgId:', orgId.value)
       // Ensure token is available before fetching data
       const token = process.client ? localStorage.getItem('authToken') : null
       if (token) {
@@ -333,21 +320,16 @@ const initializePage = async () => {
           initializeCategories(),
           artefactsStore.fetchArtefacts()
         ])
-      } else {
-        console.warn('No auth token available')
       }
-    } else {
-      console.warn('User not authenticated or no orgId available')
     }
   } catch (error) {
-    console.error('Failed to initialize page:', error)
+    // Error handled silently
   }
 }
 
 // Watch for orgId changes and fetch data
 watch(orgId, (newOrgId) => {
   if (newOrgId && authStore.isLoggedIn) {
-    console.log('OrgId changed, fetching data:', newOrgId)
     const token = process.client ? localStorage.getItem('authToken') : null
     if (token) {
       Promise.all([
@@ -361,7 +343,6 @@ watch(orgId, (newOrgId) => {
 // Watch for authentication changes
 watch(() => authStore.isLoggedIn, (isAuth) => {
   if (isAuth && orgId.value) {
-    console.log('Authentication status changed, fetching data')
     const token = process.client ? localStorage.getItem('authToken') : null
     if (token) {
       Promise.all([

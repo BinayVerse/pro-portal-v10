@@ -61,7 +61,6 @@ export const useArtefactsStore = defineStore('artefacts', {
           message: data.message || 'Files fetched successfully'
         }
       } catch (error: any) {
-        console.error('Google Drive fetch error:', error)
         this.googleDriveFiles = []
         return {
           success: false,
@@ -96,8 +95,6 @@ export const useArtefactsStore = defineStore('artefacts', {
           message: data.message || 'Files uploaded successfully'
         }
       } catch (error: any) {
-        console.error('Google Drive upload error:', error)
-
         // Handle authentication errors
         if (error.statusCode === 401) {
           localStorage.removeItem('authToken')
@@ -151,8 +148,6 @@ export const useArtefactsStore = defineStore('artefacts', {
           message: response.message
         }
       } catch (error: any) {
-        console.error('Artefact upload error:', error)
-
         // Handle authentication errors
         if (error.statusCode === 401 || error.response?.status === 401) {
           if (process.client) {
@@ -172,8 +167,6 @@ export const useArtefactsStore = defineStore('artefacts', {
     },
 
     handleError(error: any, fallbackMessage: string): string {
-      console.error('Artefacts store error:', error)
-
       if (error?.data?.message) {
         return error.data.message
       }
@@ -194,8 +187,6 @@ export const useArtefactsStore = defineStore('artefacts', {
         error?.data?.message ||
         error?.message ||
         defaultMessage
-
-      console.error('Category error:', error)
 
       if (!silent) {
         showError(errorMessage)
@@ -257,8 +248,6 @@ export const useArtefactsStore = defineStore('artefacts', {
         this.categories = data || []
         this.newCategory = null
       } catch (error: any) {
-        console.error('Fetch categories error:', error)
-
         if (!await this.handleAuthError(error)) {
           this.categoryError = this.handleCategoryError(error, 'Failed to fetch categories')
         }
@@ -287,8 +276,6 @@ export const useArtefactsStore = defineStore('artefacts', {
         // Refresh the categories list
         await this.fetchCategories(orgId)
       } catch (error: any) {
-        console.error('Create category error:', error)
-
         if (!await this.handleAuthError(error)) {
           this.categoryError = this.handleCategoryError(error, 'Error creating category')
         }
@@ -312,8 +299,6 @@ export const useArtefactsStore = defineStore('artefacts', {
         // Refresh the categories list
         await this.fetchCategories(orgId)
       } catch (error: any) {
-        console.error('Delete category error:', error)
-
         if (!await this.handleAuthError(error)) {
           this.categoryError = this.handleCategoryError(error, 'Error deleting category')
         }
@@ -337,8 +322,6 @@ export const useArtefactsStore = defineStore('artefacts', {
         this.categories = data || []
         return data || []
       } catch (error: any) {
-        console.error('Get all categories error:', error)
-
         if (!await this.handleAuthError(error)) {
           this.categoryError = this.handleCategoryError(error, 'Failed to fetch categories')
         }
@@ -410,8 +393,6 @@ export const useArtefactsStore = defineStore('artefacts', {
           message: response.message
         }
       } catch (error: any) {
-        console.error('Artefacts fetch error:', error)
-
         // Handle authentication errors
         if (error.statusCode === 401 || error.response?.status === 401) {
           if (process.client) {
