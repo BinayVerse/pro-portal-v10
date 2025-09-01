@@ -4,7 +4,7 @@
     <ArtefactsHeader @upload="showUploadModal = true" />
 
     <!-- Stats Cards -->
-    <ArtefactsStats 
+    <ArtefactsStats
       :total-artefacts="totalArtefacts"
       :processed-artefacts="processedArtefacts"
       :total-categories="totalCategories"
@@ -25,7 +25,7 @@
     <ArtefactsTable
       :artefacts="filteredArtefacts"
       @view-artefact="viewArtefact"
-      @download-artefact="downloadArtefact"
+      @reprocess-artefact="reprocessArtefact"
       @delete-artefact="deleteArtefact"
       @view-summary="viewSummary"
     />
@@ -62,6 +62,34 @@
       :loading="isDeletingCategory"
       @confirm="confirmDeleteCategory"
       @cancel="cancelDeleteCategory"
+    />
+
+    <!-- Confirm Delete Artefact Popup -->
+    <ConfirmPopup
+      v-model:is-open="showConfirmDeleteArtefact"
+      title="Delete Artefact"
+      :message="`Are you sure you want to delete '${artefactToDelete?.name}'?`"
+      details="This action cannot be undone. The artefact will be permanently removed from your storage and vector database."
+      confirm-text="Delete Artefact"
+      cancel-text="Cancel"
+      type="danger"
+      :loading="isDeletingArtefact"
+      @confirm="confirmDeleteArtefact"
+      @cancel="cancelDeleteArtefact"
+    />
+
+    <!-- Confirm Reprocess Artefact Popup -->
+    <ConfirmPopup
+      v-model:is-open="showConfirmReprocessArtefact"
+      title="Reprocess Artefact"
+      :message="`Are you sure you want to reprocess '${artefactToReprocess?.name}'?`"
+      details="This will regenerate the summary and analysis using the latest AI models. The current summary will be replaced."
+      confirm-text="Reprocess Artefact"
+      cancel-text="Cancel"
+      type="info"
+      :loading="isReprocessingArtefact"
+      @confirm="confirmReprocessArtefact"
+      @cancel="cancelReprocessArtefact"
     />
   </div>
 </template>
@@ -109,8 +137,8 @@ const authStore = useAuthStore()
 const artefactsStore = useArtefactsStore()
 
 // Get orgId from auth user
-const currentUser = computed(() => authStore.user)
-const orgId = computed(() => currentUser.value?.org_id)
+const currentUser = computed(() => authStore.user || null)
+const orgId = computed(() => currentUser.value?.org_id || null)
 
 // Fallback categories if API is not available
 const fallbackCategories = [
@@ -122,7 +150,7 @@ const fallbackCategories = [
   'Policies & Procedures',
   'Product / Service Information',
   'Technical / Operational Documentation',
-  'Training & Onboarding'
+  'Training & Onboarding',
 ]
 
 // Categories management - now from store with fallback
@@ -144,17 +172,18 @@ const isLoadingArtefacts = computed(() => artefactsStore.isArtefactsLoading)
 const artefactsError = computed(() => artefactsStore.getArtefactsError)
 
 // Individual stats computed properties
-const totalArtefacts = computed(() => stats.value.totalArtefacts)
-const processedArtefacts = computed(() => stats.value.processedArtefacts)
-const totalCategories = computed(() => stats.value.totalCategories)
-const totalSize = computed(() => stats.value.totalSize)
+const totalArtefacts = computed(() => stats.value?.totalArtefacts || 0)
+const processedArtefacts = computed(() => stats.value?.processedArtefacts || 0)
+const totalCategories = computed(() => stats.value?.totalCategories || 0)
+const totalSize = computed(() => stats.value?.totalSize || '0 Bytes')
 
 const filteredArtefacts = computed(() => {
   return artefacts.value.filter((artefact) => {
     const matchesSearch =
       !searchQuery.value ||
-      artefact.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      artefact.description.toLowerCase().includes(searchQuery.value.toLowerCase())
+      (artefact.name && artefact.name.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
+      (artefact.description &&
+        artefact.description.toLowerCase().includes(searchQuery.value.toLowerCase()))
 
     const matchesCategory = !selectedCategory.value || artefact.category === selectedCategory.value
     const matchesType = !selectedType.value || artefact.type === selectedType.value
@@ -169,17 +198,102 @@ const viewArtefact = (artefact: any) => {
   // View artefact logic to be implemented
 }
 
-const downloadArtefact = (artefact: any) => {
-  // Download artefact logic to be implemented
+const reprocessArtefact = async (artefact: any) => {
+  // Check if artefact can be reprocessed
+  if (!artefact.id) {
+    const { showError } = useNotification()
+    showError('Cannot reprocess artefact - invalid artefact data')
+    return
+  }
+
+  // Show confirmation modal
+  showConfirmReprocessArtefact.value = true
+  artefactToReprocess.value = artefact
 }
 
-const deleteArtefact = (artefact: any) => {
-  if (confirm(`Are you sure you want to delete ${artefact.name}?`)) {
-    const index = artefacts.value.findIndex((d) => d.id === artefact.id)
-    if (index > -1) {
-      artefacts.value.splice(index, 1)
+const deleteArtefact = async (artefact: any) => {
+  // Show confirmation popup first
+  showConfirmDeleteArtefact.value = true
+  artefactToDelete.value = artefact
+}
+
+// Delete confirmation state
+const showConfirmDeleteArtefact = ref(false)
+const artefactToDelete = ref<any>(null)
+const isDeletingArtefact = ref(false)
+
+// Reprocess confirmation state
+const showConfirmReprocessArtefact = ref(false)
+const artefactToReprocess = ref<any>(null)
+const isReprocessingArtefact = ref(false)
+
+// Confirm delete handler
+const confirmDeleteArtefact = async () => {
+  if (!artefactToDelete.value) return
+
+  isDeletingArtefact.value = true
+  const { showError, showSuccess } = useNotification()
+
+  try {
+    const result = await artefactsStore.deleteArtefact(
+      artefactToDelete.value.id,
+      artefactToDelete.value.name,
+    )
+
+    if (result.success) {
+      showSuccess(result.message)
+      // Refresh the artefacts list
+      await artefactsStore.fetchArtefacts()
+    } else {
+      showError(result.message)
     }
+  } catch (error: any) {
+    showError(error.message || 'Failed to delete artefact')
+  } finally {
+    isDeletingArtefact.value = false
+    showConfirmDeleteArtefact.value = false
+    artefactToDelete.value = null
   }
+}
+
+// Cancel delete handler
+const cancelDeleteArtefact = () => {
+  showConfirmDeleteArtefact.value = false
+  artefactToDelete.value = null
+  isDeletingArtefact.value = false
+}
+
+// Confirm reprocess handler
+const confirmReprocessArtefact = async () => {
+  if (!artefactToReprocess.value) return
+
+  isReprocessingArtefact.value = true
+  const { showError, showSuccess } = useNotification()
+
+  try {
+    const result = await artefactsStore.reprocessArtefact(artefactToReprocess.value.id)
+
+    if (result.success) {
+      showSuccess(result.message)
+      // Refresh the artefacts list to show updated status
+      await artefactsStore.fetchArtefacts()
+    } else {
+      showError(result.message)
+    }
+  } catch (error: any) {
+    showError(error.message || 'Failed to reprocess artefact')
+  } finally {
+    isReprocessingArtefact.value = false
+    showConfirmReprocessArtefact.value = false
+    artefactToReprocess.value = null
+  }
+}
+
+// Cancel reprocess handler
+const cancelReprocessArtefact = () => {
+  showConfirmReprocessArtefact.value = false
+  artefactToReprocess.value = null
+  isReprocessingArtefact.value = false
 }
 
 const viewSummary = (artefact: any) => {
@@ -236,7 +350,7 @@ const confirmDeleteCategory = async () => {
     if (orgId.value) {
       // Use API if orgId is available
       // Find the category ID from the store
-      const categoryData = artefactsStore.categories.find(cat => cat.name === category)
+      const categoryData = artefactsStore.categories.find((cat) => cat.name === category)
       if (categoryData) {
         await artefactsStore.deleteCategory(categoryData.id, orgId.value)
 
@@ -282,7 +396,6 @@ const initializeCategories = async () => {
   try {
     await artefactsStore.fetchCategories(orgId.value)
   } catch (error: any) {
-
     // Handle specific error types
     if (error?.statusCode === 401 || error?.response?.status === 401) {
       const { showError } = useNotification()
@@ -316,10 +429,7 @@ const initializePage = async () => {
       const token = process.client ? localStorage.getItem('authToken') : null
       if (token) {
         // Fetch both categories and artefacts
-        await Promise.all([
-          initializeCategories(),
-          artefactsStore.fetchArtefacts()
-        ])
+        await Promise.all([initializeCategories(), artefactsStore.fetchArtefacts()])
       }
     }
   } catch (error) {
@@ -328,30 +438,31 @@ const initializePage = async () => {
 }
 
 // Watch for orgId changes and fetch data
-watch(orgId, (newOrgId) => {
-  if (newOrgId && authStore.isLoggedIn) {
-    const token = process.client ? localStorage.getItem('authToken') : null
-    if (token) {
-      Promise.all([
-        initializeCategories(),
-        artefactsStore.fetchArtefacts()
-      ])
+watch(
+  orgId,
+  (newOrgId) => {
+    if (newOrgId && authStore.isLoggedIn) {
+      const token = process.client ? localStorage.getItem('authToken') : null
+      if (token) {
+        Promise.all([initializeCategories(), artefactsStore.fetchArtefacts()])
+      }
     }
-  }
-}, { immediate: false })
+  },
+  { immediate: false },
+)
 
 // Watch for authentication changes
-watch(() => authStore.isLoggedIn, (isAuth) => {
-  if (isAuth && orgId.value) {
-    const token = process.client ? localStorage.getItem('authToken') : null
-    if (token) {
-      Promise.all([
-        initializeCategories(),
-        artefactsStore.fetchArtefacts()
-      ])
+watch(
+  () => authStore.isLoggedIn,
+  (isAuth) => {
+    if (isAuth && orgId.value) {
+      const token = process.client ? localStorage.getItem('authToken') : null
+      if (token) {
+        Promise.all([initializeCategories(), artefactsStore.fetchArtefacts()])
+      }
     }
-  }
-})
+  },
+)
 
 // Initialize everything on mount
 onMounted(async () => {

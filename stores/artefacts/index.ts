@@ -26,13 +26,18 @@ export const useArtefactsStore = defineStore('artefacts', {
 
   getters: {
     // Category getters
-    getCategories: (state): DocumentCategory[] => state.categories,
-    getCategoryNames: (state): string[] => state.categories.map(cat => cat.name),
+    getCategories: (state): DocumentCategory[] => state.categories || [],
+    getCategoryNames: (state): string[] => (state.categories || []).map(cat => cat?.name || '').filter(name => name),
     isCategoryLoadingState: (state): boolean => state.isCategoryLoading,
     getCategoryError: (state): string | null => state.categoryError,
     // Artefacts getters
-    getArtefacts: (state): any[] => state.artefacts,
-    getStats: (state) => state.stats,
+    getArtefacts: (state): any[] => state.artefacts || [],
+    getStats: (state) => state.stats || {
+      totalArtefacts: 0,
+      processedArtefacts: 0,
+      totalCategories: 0,
+      totalSize: '0 Bytes'
+    },
     isArtefactsLoading: (state): boolean => state.isLoadingArtefacts,
     getArtefactsError: (state): string | null => state.artefactsError,
   },
@@ -427,6 +432,99 @@ export const useArtefactsStore = defineStore('artefacts', {
 
     clearArtefactsError() {
       this.artefactsError = null
+    },
+
+    // Reprocess artefact method
+    async reprocessArtefact(artefactId: number) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          message: string
+          data: any
+        }>(`/api/artefacts/reprocess/${artefactId}`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error(response.message)
+        }
+
+        return {
+          success: true,
+          message: response.message || 'Artefact reprocessing started successfully'
+        }
+      } catch (error: any) {
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          message: this.handleError(error, 'Failed to reprocess artefact')
+        }
+      }
+    },
+
+    // Delete artefact method
+    async deleteArtefact(artefactId: number, artefactName: string) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          message: string
+          data: any
+        }>('/api/artefacts/delete', {
+          method: 'POST',
+          body: { artefactId, artefactName },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error(response.message)
+        }
+
+        return {
+          success: true,
+          message: response.message || 'Artefact deleted successfully'
+        }
+      } catch (error: any) {
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          message: this.handleError(error, 'Failed to delete artefact')
+        }
+      }
     },
   },
 })
