@@ -434,6 +434,110 @@ export const useArtefactsStore = defineStore('artefacts', {
       this.artefactsError = null
     },
 
+    // View artefact method
+    async viewArtefact(artefactId: number) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          fileUrl: string
+          fileType: string
+          fileCategory: string
+          fileName: string
+          contentType?: string
+          docType?: string
+        }>('/api/artefacts/view', {
+          method: 'POST',
+          body: { artefactId },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error('Failed to get document view URL')
+        }
+
+        return {
+          success: true,
+          data: {
+            fileUrl: response.fileUrl,
+            fileType: response.fileType,
+            fileCategory: response.fileCategory,
+            fileName: response.fileName,
+            contentType: response.contentType,
+            docType: response.docType
+          }
+        }
+      } catch (error: any) {
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          message: this.handleError(error, 'Failed to view document')
+        }
+      }
+    },
+
+    // Summarize artefact method
+    async summarizeArtefact(artefactId: number) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          message: string
+          data?: any
+        }>(`/api/artefacts/summarize/${artefactId}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error(response.message)
+        }
+
+        return {
+          success: true,
+          message: response.message || 'Document summarized successfully'
+        }
+      } catch (error: any) {
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          message: this.handleError(error, 'Failed to summarize document')
+        }
+      }
+    },
+
     // Reprocess artefact method
     async reprocessArtefact(artefactId: number) {
       try {
@@ -523,6 +627,117 @@ export const useArtefactsStore = defineStore('artefacts', {
         return {
           success: false,
           message: this.handleError(error, 'Failed to delete artefact')
+        }
+      }
+    },
+
+    // Check if file exists
+    async checkFileExists(fileName: string) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          exists: boolean
+          fileInfo?: {
+            id: number
+            name: string
+            category: string
+            lastUpdated: string
+          }
+        }>('/api/artefacts/check-exists', {
+          method: 'POST',
+          body: { fileName },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error('Failed to check file existence')
+        }
+
+        return {
+          success: true,
+          exists: response.exists,
+          fileInfo: response.fileInfo
+        }
+      } catch (error: any) {
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          exists: false,
+          message: this.handleError(error, 'Failed to check file existence')
+        }
+      }
+    },
+
+    // Check if multiple files exist using unified endpoint
+    async checkFilesExistBulk(fileNames: string[]) {
+      try {
+        const token = process.client ? localStorage.getItem('authToken') : null
+        if (!token) {
+          throw new Error('Authentication required')
+        }
+
+        const response = await $fetch<{
+          statusCode: number
+          status: string
+          results: Array<{
+            originalFileName: string
+            cleanedFileName: string
+            exists: boolean
+            fileInfo?: {
+              id: number
+              name: string
+              category: string
+              lastUpdated: string
+            }
+          }>
+        }>('/api/artefacts/check-exists', {
+          method: 'POST',
+          body: { fileNames },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.status === 'error') {
+          throw new Error('Failed to check files existence')
+        }
+
+        return {
+          success: true,
+          results: response.results
+        }
+      } catch (error: any) {
+        // Handle authentication errors
+        if (error.statusCode === 401 || error.response?.status === 401) {
+          if (process.client) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('authUser')
+          }
+          await navigateTo('/login')
+          throw new Error('Session expired. Please log in again.')
+        }
+
+        return {
+          success: false,
+          results: [],
+          message: this.handleError(error, 'Failed to check files existence')
         }
       }
     },
