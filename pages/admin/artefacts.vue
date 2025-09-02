@@ -393,6 +393,41 @@ const viewSummary = (artefact: any) => {
   showSummaryModal.value = true
 }
 
+const downloadArtefact = async (artefact: any) => {
+  if (!artefact || !artefact.id) {
+    const { showError } = useNotification()
+    showError('Cannot download artefact - invalid artefact data')
+    return
+  }
+
+  const { showError, showSuccess, showInfo } = useNotification()
+
+  try {
+    showInfo('Preparing download...')
+
+    // Use the existing viewArtefact method to get the file URL
+    const result = await artefactsStore.viewArtefact(artefact.id)
+
+    if (result.success && result.data.fileUrl) {
+      // Create a temporary link to trigger download
+      const link = document.createElement('a')
+      link.href = result.data.fileUrl
+      link.download = result.data.fileName || artefact.name || 'document'
+      link.target = '_blank' // Open in new tab as fallback
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      showSuccess('Download started successfully')
+    } else {
+      showError(result.message || 'File URL not available for download')
+    }
+  } catch (error: any) {
+    console.error('Download error:', error)
+    showError(error?.message || 'Failed to download artefact')
+  }
+}
+
 // Upload handlers
 const handleFileUploaded = async (artefact: any) => {
   // Refresh the artefacts list to get updated data and stats

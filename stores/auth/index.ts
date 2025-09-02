@@ -43,19 +43,45 @@ export const useAuthStore = defineStore("authStore", {
 
     // Generic API call handler
     async apiCall<T>(endpoint: string, data?: any): Promise<T> {
-      const response = await $fetch<ApiResponse<T>>(endpoint, {
-        method: "POST",
-        body: data,
-        ignoreResponseError: true,
-      });
+      try {
+        const response = await $fetch<ApiResponse<T>>(endpoint, {
+          method: "POST",
+          body: data,
+          ignoreResponseError: true,
+        });
 
-      if (response?.status === "success") {
-        return response.data || response as T;
+        if (response?.status === "success") {
+          return response.data || response as T;
+        }
+
+        // Handle structured error responses
+        if (response?.status === "error") {
+          const errorMessage = response.message || "Operation failed";
+          this.setError(errorMessage);
+          throw new Error(errorMessage);
+        }
+
+        // Fallback for legacy responses
+        const errorMessage = response?.message || "Operation failed";
+        this.setError(errorMessage);
+        throw new Error(errorMessage);
+      } catch (error: any) {
+        // Handle fetch errors (network, HTTP status codes, etc.)
+        if (error.data?.message) {
+          // Structured error from server
+          this.setError(error.data.message);
+          throw new Error(error.data.message);
+        } else if (error.message) {
+          // Other errors
+          this.setError(error.message);
+          throw new Error(error.message);
+        } else {
+          // Unknown error
+          const fallbackMessage = "An unexpected error occurred";
+          this.setError(fallbackMessage);
+          throw new Error(fallbackMessage);
+        }
       }
-
-      const errorMessage = response?.message || "Operation failed";
-      this.setError(errorMessage);
-      throw new Error(errorMessage);
     },
 
     // Initialize store from localStorage or cookies
