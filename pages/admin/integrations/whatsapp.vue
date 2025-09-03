@@ -45,19 +45,6 @@
         >
           Disconnect
         </UButton>
-
-        <UButton
-          v-else-if="connectionStatus.hasBeenConnected"
-          @click="reconnectWhatsApp"
-          color="green"
-          icon="heroicons:arrow-path"
-        >
-          Reconnect
-        </UButton>
-
-        <UButton v-else @click="connectWhatsApp" color="green" icon="heroicons:plus">
-          Connect
-        </UButton>
       </div>
     </div>
 
@@ -80,9 +67,9 @@
                 size="sm"
                 color="gray"
                 variant="ghost"
-                icon="heroicons:pencil"
+                :icon="isFirstTimeSetup ? 'heroicons:plus' : 'heroicons:pencil'"
               >
-                Edit
+                {{ isFirstTimeSetup ? 'Setup' : 'Edit' }}
               </UButton>
 
               <template v-else>
@@ -91,9 +78,9 @@
                   :loading="isSaving"
                   size="sm"
                   color="green"
-                  icon="heroicons:check"
+                  :icon="isFirstTimeSetup ? 'heroicons:plus' : 'heroicons:check'"
                 >
-                  Save
+                  {{ isFirstTimeSetup ? 'Connect' : 'Update' }}
                 </UButton>
                 <UButton
                   @click="cancelEdit"
@@ -165,23 +152,6 @@
               />
             </UFormGroup>
 
-            <!-- Webhook URL -->
-            <UFormGroup label="Webhook URL">
-              <UInput
-                v-if="!isEditMode"
-                :model-value="whatsappConfig.webhookUrl || 'Not configured'"
-                readonly
-                icon="heroicons:link"
-                placeholder="No webhook URL configured"
-              />
-              <UInput
-                v-else
-                v-model="editForm.webhookUrl"
-                icon="heroicons:link"
-                placeholder="https://your-domain.com/api/whatsapp/webhook"
-              />
-            </UFormGroup>
-
             <!-- Permanent Access Token -->
             <UFormGroup label="Permanent Access Token">
               <UInput
@@ -238,6 +208,102 @@
                 </button>
               </div>
             </UFormGroup>
+
+            <!-- Webhook URL (always read-only) -->
+            <UFormGroup>
+              <template #label>
+                <div class="flex items-center space-x-2">
+                  <span>Webhook URL</span>
+                  <UTooltip
+                    text="Copy this Webhook URL and add it to your Meta Developer Account under 'WhatsApp > Configuration > Webhook'"
+                    :popper="{ placement: 'top' }"
+                  >
+                    <UIcon
+                      name="heroicons:information-circle"
+                      class="w-4 h-4 text-blue-400 cursor-help"
+                    />
+                  </UTooltip>
+                </div>
+              </template>
+              <div class="relative">
+                <UInput
+                  :model-value="webhookUrl"
+                  readonly
+                  icon="heroicons:link"
+                  class="font-mono text-sm"
+                  :ui="{
+                    wrapper: 'relative',
+                    icon: { base: 'pointer-events-none' },
+                    base: 'pr-12',
+                  }"
+                />
+                <!-- <UTooltip text="Copy webhook URL">
+                  <UButton
+                    @click="copyWebhookUrl"
+                    size="xs"
+                    color="gray"
+                    variant="ghost"
+                    icon="heroicons:clipboard"
+                    class="absolute right-2 top-1/2 transform -translate-y-1/2"
+                    :ui="{ rounded: 'rounded-md' }"
+                  />
+                </UTooltip> -->
+              </div>
+            </UFormGroup>
+
+            <!-- Webhook Configuration Help -->
+            <!-- <div
+              v-if="connectionStatus.isConnected || isEditMode"
+              class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+            >
+              <div class="space-y-3">
+                <div class="flex items-start space-x-2">
+                  <UIcon
+                    name="heroicons:light-bulb"
+                    class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0"
+                  />
+                  <div class="space-y-2">
+                    <p class="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                      Webhook Configuration Steps:
+                    </p>
+                    <ol
+                      class="text-sm text-blue-600 dark:text-blue-400 space-y-1 ml-4 list-decimal"
+                    >
+                      <li>Copy the webhook URL above using the copy button</li>
+                      <li>Go to your Meta Developer Account</li>
+                      <li>Navigate to WhatsApp → Configuration → Webhook</li>
+                      <li>Paste the webhook URL and configure your events</li>
+                      <li>Use 'webhook' as the verify token</li>
+                    </ol>
+                  </div>
+                </div>
+
+                <div class="border-t border-blue-200 dark:border-blue-700 pt-3">
+                  <p class="text-xs text-blue-600 dark:text-blue-400 mb-3">
+                    Need help? Check our resources below:
+                  </p>
+                  <div class="flex flex-wrap gap-4">
+                    <NuxtLink
+                      to="https://storage.googleapis.com/provento-guide-documents/MetaApp_Setup.pdf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors"
+                    >
+                      <UIcon name="heroicons:document-text" class="w-4 h-4" />
+                      <span>Setup Guidelines</span>
+                    </NuxtLink>
+
+                    <NuxtLink
+                      to="/contact"
+                      class="inline-flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors"
+                    >
+                      <UIcon name="heroicons:calendar-days" class="w-4 h-4" />
+                      <span>Book a Meeting</span>
+                    </NuxtLink>
+                  </div>
+                </div>
+              </div>
+            </div> -->
           </div>
         </div>
       </UCard>
@@ -245,9 +311,22 @@
       <!-- QR Code & Connection Status -->
       <UCard>
         <template #header>
-          <div class="flex items-center space-x-2">
-            <UIcon name="heroicons:qr-code" class="w-5 h-5 text-gray-400" />
-            <h2 class="text-lg font-semibold text-white">WhatsApp QR Code</h2>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <UIcon name="heroicons:qr-code" class="w-5 h-5 text-gray-400" />
+              <h2 class="text-lg font-semibold text-white">WhatsApp QR Code</h2>
+            </div>
+            <UButton
+              v-if="connectionStatus.isConnected && integrationsStore.qrCode"
+              @click="refreshQrCode"
+              :loading="integrationsStore.loading"
+              size="sm"
+              color="gray"
+              variant="ghost"
+              icon="heroicons:arrow-path"
+            >
+              Refresh
+            </UButton>
           </div>
         </template>
 
@@ -256,15 +335,41 @@
           <div class="flex flex-col items-center space-y-4">
             <div class="bg-white p-4 rounded-lg">
               <div class="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-                <!-- QR Code placeholder - you can replace this with actual QR code generation -->
-                <div class="text-center">
+                <!-- Loading state -->
+                <div v-if="integrationsStore.loading" class="text-center">
+                  <div
+                    class="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500 mx-auto mb-2"
+                  ></div>
+                  <p class="text-sm text-gray-500">Loading QR code...</p>
+                </div>
+
+                <!-- QR Code image -->
+                <img
+                  v-else-if="integrationsStore.qrCode"
+                  :src="integrationsStore.qrCode"
+                  alt="WhatsApp QR Code"
+                  class="w-full h-full object-contain rounded"
+                />
+
+                <!-- No QR Code placeholder -->
+                <div v-else class="text-center">
                   <UIcon name="heroicons:qr-code" class="w-16 h-16 text-gray-400 mx-auto mb-2" />
-                  <p class="text-sm text-gray-500">Scan to connect</p>
+                  <p class="text-sm text-gray-500">
+                    {{
+                      connectionStatus.isConnected
+                        ? 'QR code not available'
+                        : 'Setup WhatsApp to generate QR code'
+                    }}
+                  </p>
                 </div>
               </div>
             </div>
             <p class="text-center text-gray-300 text-sm">
-              Scan this QR code with WhatsApp to connect with our bot
+              {{
+                integrationsStore.qrCode
+                  ? 'Scan this QR code with WhatsApp to connect with our bot'
+                  : 'QR code will appear here after WhatsApp configuration'
+              }}
             </p>
           </div>
 
@@ -432,6 +537,7 @@ import { useIntegrationsStore } from '~/stores'
 
 const integrationsStore = useIntegrationsStore()
 const { showSuccess, showError } = useNotification()
+const config = useRuntimeConfig()
 
 // Reactive data
 const showDisconnectModal = ref(false)
@@ -444,59 +550,82 @@ const phoneRef = ref()
 const editForm = ref({
   businessNumber: '',
   appId: '',
-  webhookUrl: '',
   accessToken: '',
   appSecret: '',
 })
 
 // Computed properties for WhatsApp configuration
 const whatsappConfig = computed(() => {
-  // This would normally come from your integrations store
-  // For now, returning empty values with placeholders
+  const details = integrationsStore.whatsappDetails
+
   return {
-    businessNumber: '',
-    appId: '',
-    webhookUrl: '',
-    accessToken: '',
-    appSecret: '',
+    businessNumber: details?.business_whatsapp_number || '',
+    appId: details?.app_id || '',
+    accessToken: details?.permanent_access_token || '',
+    appSecret: details?.app_secret_key || '',
   }
 })
 
 // Computed properties for connection status
 const connectionStatus = computed(() => {
-  // This would normally come from your integrations store
-  // Check if we have all required configuration
-  const hasConfig =
-    whatsappConfig.value.businessNumber &&
-    whatsappConfig.value.appId &&
-    whatsappConfig.value.webhookUrl &&
-    whatsappConfig.value.accessToken
+  const details = integrationsStore.whatsappDetails
+  const hasConfig = Boolean(
+    details?.business_whatsapp_number &&
+      details?.app_id &&
+      details?.permanent_access_token &&
+      details?.app_secret_key,
+  )
 
-  const isConnected = false // You can modify this based on actual connection status
-  const hasBeenConnected = false // This would be true if previously connected but now disconnected
+  const isConnected = Boolean(details?.whatsapp_status && hasConfig)
+  const hasBeenConnected = Boolean(details && !details.whatsapp_status)
 
   return {
-    isConnected: Boolean(isConnected && hasConfig),
-    hasBeenConnected: Boolean(hasBeenConnected),
-    neverConnected: !hasConfig,
+    isConnected,
+    hasBeenConnected,
+    neverConnected: !details,
   }
 })
 
-// Methods
-const connectWhatsApp = async () => {
-  // Implement WhatsApp connection logic
-  console.log('Connecting WhatsApp integration...')
-}
+// Computed property to determine if this is first time setup
+const isFirstTimeSetup = computed(() => {
+  return !Boolean(integrationsStore.whatsappDetails?.business_whatsapp_number)
+})
 
-const reconnectWhatsApp = async () => {
-  // Implement WhatsApp reconnection logic
-  console.log('Reconnecting WhatsApp integration...')
-}
+// Computed property for webhook URL
+const webhookUrl = computed(() => {
+  const baseUrl = config.public.botEndpoint || 'https://your-domain.com/'
+  return `${baseUrl}webhook`
+})
+
+// Methods
 
 const disconnectWhatsApp = async () => {
-  // Implement WhatsApp disconnection logic
-  console.log('Disconnecting WhatsApp integration...')
-  showDisconnectModal.value = false
+  try {
+    await integrationsStore.disconnectWhatsApp()
+    showDisconnectModal.value = false
+  } catch (error) {
+    console.error('Error disconnecting WhatsApp:', error)
+  }
+}
+
+const refreshQrCode = async () => {
+  try {
+    await integrationsStore.fetchQrCode()
+    showSuccess('QR code refreshed successfully!')
+  } catch (error) {
+    showError('Failed to refresh QR code. Please try again.')
+    console.error('Error refreshing QR code:', error)
+  }
+}
+
+const copyWebhookUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(webhookUrl.value)
+    showSuccess('Webhook URL copied to clipboard!')
+  } catch (error) {
+    showError('Failed to copy webhook URL. Please copy manually.')
+    console.error('Error copying webhook URL:', error)
+  }
 }
 
 // Edit mode methods
@@ -505,7 +634,6 @@ const enterEditMode = () => {
   editForm.value = {
     businessNumber: whatsappConfig.value.businessNumber || '',
     appId: whatsappConfig.value.appId || '',
-    webhookUrl: whatsappConfig.value.webhookUrl || '',
     accessToken: whatsappConfig.value.accessToken || '',
     appSecret: whatsappConfig.value.appSecret || '',
   }
@@ -517,7 +645,6 @@ const cancelEdit = () => {
   editForm.value = {
     businessNumber: '',
     appId: '',
-    webhookUrl: '',
     accessToken: '',
     appSecret: '',
   }
@@ -548,11 +675,11 @@ const saveConfiguration = async () => {
     if (
       !formattedPhone ||
       !editForm.value.appId ||
-      !editForm.value.webhookUrl ||
-      !editForm.value.accessToken
+      !editForm.value.accessToken ||
+      !editForm.value.appSecret
     ) {
       showError(
-        'Please fill in all required fields: Business Number, App ID, Webhook URL, and Access Token.',
+        'Please fill in all required fields: Business Number, App ID, Access Token, and App Secret.',
       )
       return
     }
@@ -560,20 +687,36 @@ const saveConfiguration = async () => {
     // Update the business number with the formatted phone number
     editForm.value.businessNumber = formattedPhone
 
-    // Here you would normally make an API call to save the configuration
-    // await integrationsStore.updateWhatsAppConfig(editForm.value)
+    // Prepare the data for the API
+    const whatsappData = {
+      business_whatsapp_number: editForm.value.businessNumber,
+      permanent_access_token: editForm.value.accessToken,
+      app_id: editForm.value.appId,
+      app_secret_key: editForm.value.appSecret,
+    }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Check if this is an update or create
+    const isUpdate = Boolean(integrationsStore.whatsappDetails?.business_whatsapp_number)
 
-    showSuccess('WhatsApp configuration updated successfully!')
+    if (isUpdate) {
+      await integrationsStore.updateWhatsAppAccount(whatsappData)
+    } else {
+      await integrationsStore.createWhatsAppAccount(whatsappData)
+    }
+
+    // Fetch QR code after successful save
+    try {
+      await integrationsStore.fetchQrCode()
+    } catch (error) {
+      console.log('QR code will be available shortly')
+    }
 
     // Exit edit mode and reset password visibility
     showAppSecret.value = false
     isEditMode.value = false
   } catch (error) {
-    showError('Failed to update WhatsApp configuration. Please try again.')
     console.error('Error saving WhatsApp config:', error)
+    // Error handling is done in the store
   } finally {
     isSaving.value = false
   }
@@ -581,8 +724,17 @@ const saveConfiguration = async () => {
 
 // Lifecycle
 onMounted(async () => {
-  // Fetch current WhatsApp details if you have an integrations store method
-  // await integrationsStore.fetchWhatsAppDetails()
+  // Fetch current WhatsApp details
+  await integrationsStore.fetchWhatsAppDetails()
+
+  // Fetch QR code if WhatsApp is configured
+  if (integrationsStore.whatsappDetails?.business_whatsapp_number) {
+    try {
+      await integrationsStore.fetchQrCode()
+    } catch (error) {
+      console.log('QR code not available yet')
+    }
+  }
 })
 
 useHead({

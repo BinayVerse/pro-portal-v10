@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { IntegrationsOverview, IntegrationActivity, ApiResponse } from './types'
+import type { IntegrationsOverview, IntegrationActivity, ApiResponse, BusinessWhatsAppDetails, WhatsAppNumber, WhatsAppAccountData } from './types'
 import { useNotification } from '~/composables/useNotification'
 
 export const useIntegrationsStore = defineStore('integrations', {
@@ -14,6 +14,11 @@ export const useIntegrationsStore = defineStore('integrations', {
     teamsAppDetails: null as any | null,
     teamsAppStatus: true,
     manifestDownloading: false,
+    // WhatsApp state
+    whatsappDetails: null as WhatsAppAccountData | null,
+    whatsappStatus: true,
+    businessWhatsAppNumber: '' as string,
+    qrCode: '' as string,
   }),
 
   getters: {
@@ -516,6 +521,197 @@ export const useIntegrationsStore = defineStore('integrations', {
         }
       } finally {
         this.manifestDownloading = false;
+      }
+    },
+
+    // WhatsApp integration methods
+    async createWhatsAppAccount(input: BusinessWhatsAppDetails) {
+      try {
+        this.loading = true;
+        this.error = null;
+
+        const data = await $fetch<WhatsAppNumber>(
+          '/api/integrations/whatsapp/connect',
+          {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: input,
+          }
+        );
+
+        this.businessWhatsAppNumber = data?.data?.business_whatsapp_number ?? '';
+
+        if (process.client) {
+          const { showSuccess } = useNotification();
+          showSuccess(data?.message || 'Business WhatsApp Account added successfully');
+        }
+
+        // Refresh details after successful creation
+        await this.fetchWhatsAppDetails();
+
+        return data;
+      } catch (error: any) {
+        if (!await this.handleAuthError(error)) {
+          this.error = this.handleError(error, 'Error adding Business WhatsApp Number');
+
+          if (process.client) {
+            const { showError } = useNotification();
+            showError(this.error);
+          }
+        }
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async updateWhatsAppAccount(input: BusinessWhatsAppDetails) {
+      try {
+        this.loading = true;
+        this.error = null;
+
+        const data = await $fetch<WhatsAppNumber>(
+          '/api/integrations/whatsapp/update',
+          {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: input,
+          }
+        );
+
+        this.businessWhatsAppNumber = data?.data?.business_whatsapp_number ?? '';
+
+        if (process.client) {
+          const { showSuccess } = useNotification();
+          showSuccess(data?.message || 'Business WhatsApp Account updated successfully');
+        }
+
+        // Refresh details after successful update
+        await this.fetchWhatsAppDetails();
+
+        return data;
+      } catch (error: any) {
+        if (!await this.handleAuthError(error)) {
+          this.error = this.handleError(error, 'Error updating Business WhatsApp Number');
+
+          if (process.client) {
+            const { showError } = useNotification();
+            showError(this.error);
+          }
+        }
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async fetchWhatsAppDetails() {
+      try {
+        this.loading = true;
+        this.error = null;
+        this.whatsappStatus = true;
+
+        const data = await $fetch<ApiResponse<WhatsAppAccountData>>(
+          '/api/integrations/whatsapp/details',
+          {
+            headers: this.getAuthHeaders(),
+          }
+        );
+
+        if (data?.status === 'success' && data.data) {
+          this.whatsappDetails = data.data;
+          this.businessWhatsAppNumber = data.data.business_whatsapp_number || '';
+          this.whatsappStatus = !data.data.whatsapp_status;
+        } else {
+          // Partial or no data
+          this.whatsappDetails = null;
+          this.businessWhatsAppNumber = '';
+          this.whatsappStatus = true;
+        }
+
+        return data?.data;
+      } catch (error: any) {
+        if (!await this.handleAuthError(error)) {
+          this.error = this.handleError(error, 'Error fetching Business WhatsApp Details');
+        }
+        // Reset details on error
+        this.whatsappDetails = null;
+        this.businessWhatsAppNumber = '';
+        this.whatsappStatus = true;
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async disconnectWhatsApp() {
+      try {
+        this.loading = true;
+        this.error = null;
+
+        const data = await $fetch<ApiResponse<any>>(
+          '/api/integrations/whatsapp/disconnect',
+          {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+          }
+        );
+
+        // Clear WhatsApp details
+        this.whatsappDetails = null;
+        this.businessWhatsAppNumber = '';
+        this.whatsappStatus = true;
+        this.qrCode = '';
+
+        if (process.client) {
+          const { showSuccess } = useNotification();
+          showSuccess(data?.message || 'WhatsApp integration disconnected successfully');
+        }
+
+        return data;
+      } catch (error: any) {
+        if (!await this.handleAuthError(error)) {
+          this.error = this.handleError(error, 'Error disconnecting WhatsApp integration');
+
+          if (process.client) {
+            const { showError } = useNotification();
+            showError(this.error);
+          }
+        }
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async fetchQrCode() {
+      try {
+        this.loading = true;
+        this.error = null;
+
+        const data = await $fetch<{ statusCode: number; status: string; data: string | null; message: string }>(
+          '/api/integrations/whatsapp/qr-code',
+          {
+            headers: this.getAuthHeaders(),
+          }
+        );
+
+        if (data?.status === 'success' && data.data) {
+          this.qrCode = data.data;
+        } else {
+          // No QR code available or partial response
+          this.qrCode = '';
+        }
+
+        return data;
+      } catch (error: any) {
+        if (!await this.handleAuthError(error)) {
+          this.error = this.handleError(error, 'Failed to fetch QR Code');
+        }
+        this.qrCode = '';
+        throw error;
+      } finally {
+        this.loading = false;
       }
     },
   },
