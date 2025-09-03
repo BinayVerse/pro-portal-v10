@@ -9,6 +9,7 @@
       :processed-artefacts="processedArtefacts"
       :total-categories="totalCategories"
       :total-size="totalSize"
+      :loading="isLoadingStats"
     />
 
     <!-- Search and Filters -->
@@ -25,6 +26,7 @@
     <ArtefactsTable
       :artefacts="filteredArtefacts"
       :summarizing-docs="artefactsStore.getSummarizingDocs"
+      :loading="isLoadingArtefacts"
       @view-artefact="viewArtefact"
       @reprocess-artefact="reprocessArtefact"
       @delete-artefact="deleteArtefact"
@@ -196,6 +198,12 @@ const artefacts = computed(() => artefactsStore.getArtefacts)
 const stats = computed(() => artefactsStore.getStats)
 const isLoadingArtefacts = computed(() => artefactsStore.isArtefactsLoading)
 const artefactsError = computed(() => artefactsStore.getArtefactsError)
+
+// Show loading for stats only on initial load (when no data exists yet)
+const isLoadingStats = computed(() => {
+  // Only show loading on true initial load when we have no artefacts data at all
+  return artefactsStore.isArtefactsLoading && artefacts.value.length === 0
+})
 
 // Individual stats computed properties
 const totalArtefacts = computed(() => stats.value?.totalArtefacts || 0)
@@ -607,11 +615,11 @@ watch(
   },
 )
 
-// Watch for auto-processing completion
+// Watch for auto-processing completion (both processing and summarization)
 watch(
-  () => artefactsStore.getProcessingStatus().allProcessed,
-  (allProcessed) => {
-    // Silent monitoring of processing completion
+  () => artefactsStore.getProcessingStatus().allComplete,
+  (allComplete) => {
+    // Silent monitoring of complete processing (processed + summarized)
   }
 )
 
@@ -628,7 +636,7 @@ watch(
 onMounted(async () => {
   await initializePage()
 
-  // Automatically start background processing if there are unprocessed documents
+  // Automatically start background processing if there are unprocessed or unsummarized documents
   await nextTick()
   const processingStatus = artefactsStore.getProcessingStatus()
 

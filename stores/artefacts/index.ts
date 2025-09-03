@@ -822,8 +822,8 @@ export const useArtefactsStore = defineStore('artefacts', {
         try {
           await this.fetchArtefacts()
 
-          // Only stop polling if all documents are processed (not summarized)
-          if (this.allDocumentsProcessed) {
+          // Stop polling only if all documents are processed AND summarized
+          if (this.allDocumentsProcessed && this.allDocumentsSummarized) {
             this.stopAutoProcessing()
           } else {
             this.adjustPollingInterval()
@@ -853,6 +853,15 @@ export const useArtefactsStore = defineStore('artefacts', {
         for (const doc of newlyProcessedDocs) {
           this.summarizingDocs.add(doc.id)
           this.attemptedSummarizations.add(doc.id)
+
+          // Show notification when summarization starts
+          if (process.client) {
+            const { showInfo } = useNotification()
+            showInfo(`Auto summarization started for "${doc.name}"`, {
+              title: 'Summarization Started',
+              duration: 4000
+            })
+          }
 
           // Process in background
           this.processSingleSummarization(doc.id).finally(() => {
@@ -956,6 +965,7 @@ export const useArtefactsStore = defineStore('artefacts', {
         progress: this.processingProgress,
         pollingInterval: this.pollingIntervalMs / 1000, // in seconds
         allProcessed: this.allDocumentsProcessed,
+        allComplete: this.allDocumentsProcessed && this.allDocumentsSummarized,
       }
     },
   },
